@@ -13,7 +13,8 @@ ENV/
 .vscode/
 .idea/
 
-# Generated features and results (too large for git)
+# Data, generated features and results (too large for git)
+data/icir/
 features
 features/
 results/

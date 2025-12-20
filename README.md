@@ -1,21 +1,55 @@
-# i-CIR: Instance-Level Composed Image Retrieval (NeurIPS 2025)
+<div align="center">
+<h1>i-CIR: Instance-Level Composed Image Retrieval (NeurIPS 2025)</h1>
+
+**Bill Psomas<sup>1</sup>†, George Retsinas<sup>2</sup>†, Nikos Efthymiadis<sup>1</sup>, Panagiotis Filntisis<sup>2,4</sup>**  
+**Yannis Avrithis, Petros Maragos<sup>2,3,4</sup>, Ondrej Chum<sup>1</sup>, Giorgos Tolias<sup>1</sup>**
+
+<sup>1</sup>Visual Recognition Group, FEE, Czech Technical University in Prague <sup>2</sup>Robotics Institute, Athena Research Center  
+<sup>3</sup>National Technical University of Athens  <sup>4</sup>HERON - Hellenic Robotics Center of Excellence
+
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-blue)](https://huggingface.co/datasets/billpsomas/icir)
+[![Project Page](https://img.shields.io/badge/-Project_Page-green.svg?colorA=333&logo=html5)](https://vrg.fel.cvut.cz/icir/)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Paper-yellow)](https://huggingface.co/papers/2510.25387)
+[![arXiv](https://img.shields.io/badge/arXiv-2510.25387-b31b1b.svg)](https://arxiv.org/abs/2510.25387)
+[![OpenReview](https://img.shields.io/badge/OpenReview-Paper-yellow.svg)](https://openreview.net/pdf?id=7NEP4jGKwA)
 
 [![Dataset Version](https://img.shields.io/badge/Dataset-v1.0.0-blue.svg)](#)
-[![Dataset License](https://img.shields.io/badge/Dataset%20License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Code License: MIT](https://img.shields.io/badge/Code%20License-MIT-yellow.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9%2B-informational.svg)](#)
+[![Dataset License](https://img.shields.io/badge/Dataset%20License-CC%20BY--NC--SA%204.0-blue.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+[![Code License: MIT](https://img.shields.io/badge/Code%20License-MIT-lightgray.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.9%2B-lightgray.svg)](#)
+
+</div>
 
 Official implementation of our **B**aseline **A**pproach for **S**urpr**I**singly strong **C**omposition (**BASIC**) and the **i**nstance-level **c**omposed **i**mage **r**etrieval (**i-CIR**) dataset.   
-[[`arXiv`](https://arxiv.org/abs/2510.25387)] · [[`paper`](https://openreview.net/pdf?id=7NEP4jGKwA)] · [[`project page`](https://vrg.fel.cvut.cz/icir/)]
 
-**TL;DR**: We introduce **BASIC**, a training-free VLM-based method that centers and projects image embeddings, and **i-CIR**—a curated, instance-level composed image retrieval benchmark with rich hard negatives that is compact yet really hard.
+**TL;DR**: We introduce **BASIC**, a training-free VLM-based **method** that centers and projects image embeddings, and **i-CIR**, a well-curated, instance-level composed image retrieval **benchmark** with *rich hard negatives* that is *compact yet really hard*.
 
-## Overview
+# Contents
+1. [News](#news)
+2. [Overview](#overview)
+3. [Download the i-CIR dataset](#download-the-i-CIR-dataset)
+4. [Installation](#installation)
+5. [Quick Start](#quick-start)
+6. [Methods](#methods)
+7. [Key Parameters](#key-parameters)
+8. [Corpus Files](#corpus-files)
+9. [Output](#output)
+10. [Results](#results)
+11. [Project Structure](#project-structure)
+12. [Citation](#citation)
+13. [License](#license)
+14. [Acknowledgments](#acknowledgments)
+15. [Contact](#contact)
+
+# News
+- **5/12/2025**: i-CIR is presented at NeurIPS 2025! 🎉 Go now through [[`slides`](.github/icir_poster.png)].
+
+# Overview
 
 This repository contains a clean implementation for performing composed image retrieval (CIR) on **i-CIR** dataset using vision-language models (CLIP/SigLIP). 
 
 
-### Method (BASIC)
+## Method (BASIC)
 
 Our BASIC method decomposes multimodal queries into object and style components through:
 
@@ -28,9 +62,9 @@ Our BASIC method decomposes multimodal queries into object and style components 
 <img width="85%" alt="EP illustration" src=".github/method.png">
 </p>
 
-### Dataset
+## Dataset
 
-#### Well-curated
+### Well-curated
 
 i-CIR is an instance-level composed image retrieval benchmark where each *instance* is a specific, visually indistinguishable object (e.g., Temple of Poseidon). Each query composes an image of the instance with a text modification. For every instance we curate a shared database and define composed positives plus a rich set of **hard negatives**—**visual** (same/similar object, wrong text), **textual** (right text semantics, different instance—often same category), and **composed** (nearly matches both parts but fails one).
 
@@ -38,7 +72,7 @@ i-CIR is an instance-level composed image retrieval benchmark where each *instan
 <img width="75%" alt="EP illustration" src=".github/dataset.png">
 </p>
 
-#### Compact but hard
+### Compact but hard
 
 <img src=".github/hard.png" align="right" width="40%">
 
@@ -54,7 +88,7 @@ Built by combining human curation with automated retrieval from LAION, followed 
 
 <br clear="right"/>
 
-#### Truly compositional
+### Truly compositional
 
 Performance peaks at interior text–image fusion weights ($\lambda$) and shows large **composition gains** over the best uni-modal baselines—evidence that both modalities *must* work together.
 
@@ -62,11 +96,13 @@ Performance peaks at interior text–image fusion weights ($\lambda$) and shows 
 <img width="80%" alt="EP illustration" src=".github/compositional.png">
 </p>
 
-## 🔽 Download the i-CIR dataset
+# 🔽 Download the i-CIR dataset
 
+i-CIR is available in two equivalent formats:
+
+## **Option A — Direct tarball (local folder layout)**
 i-CIR is stored [here](https://vrg.fel.cvut.cz/icir/icir_v1.0.0.tar.gz).
 
-**Option A — Direct tarball (recommended):**
 ```bash
 # Download 
 wget https://vrg.fel.cvut.cz/icir/icir_v1.0.0.tar.gz -O icir_v1.0.0.tar.gz
@@ -76,7 +112,7 @@ tar -xzf icir_v1.0.0.tar.gz
 sha256sum -c icir_v1.0.0.sha256   # should print OK
 ```
 
-**Reulting layout:**
+**Reulting layout (folder-based):**
 ```
 icir/
 ├── database/
@@ -88,14 +124,69 @@ icir/
 └── checksums.sha256
 ```
 
-## Installation
+## **Option B — Hugging Face Hub (WebDataset shards)**
 
-### Requirements
+You can also download i-CIR directly from the Hugging Face Hub as WebDataset tar shards (recommended for more robust downloading).
+
+**CLI:**
+```bash
+# Install HF tooling
+pip install -U huggingface_hub
+
+# (Optional) login if the repo is gated/private
+huggingface-cli login
+
+# Download the dataset snapshot locally
+huggingface-cli download billpsomas/icir \
+  --repo-type dataset \
+  --local-dir ./data/icir \
+  --revision main
+```
+
+**Python (equivalent):**
+```python
+from huggingface_hub import snapshot_download
+
+local_dir = snapshot_download(
+    repo_id="billpsomas/icir",
+    repo_type="dataset",
+    revision="main",
+    local_dir="./data/icir",
+)
+print("Downloaded to:", local_dir)
+```
+
+**Resulting layout (WebDataset-based):**
+
+```
+icir/
+├── webdataset/
+│   ├── query/
+│   │   ├── query-000000.tar
+│   │   ├── query-000001.tar
+│   │   └── ...
+│   └── database/
+│       ├── database-000000.tar
+│       ├── database-000001.tar
+│       └── ...
+├── annotations/
+│   ├── query_files.csv
+│   ├── database_files.csv
+├── VERSION.txt
+└── LICENSE
+```
+
+You do not need to extract images to a database/ and query/ folder for this option; feature extraction reads directly from the WebDataset shards.
+
+# Installation
+
+## Requirements
 - Python 3.9+
 - PyTorch 2.0+
 - CUDA-capable GPU (recommended)
+- (Optional, for Hugging Face / WebDataset mode) `huggingface_hub` + `webdataset`
 
-### Setup
+## Setup
 
 ```bash
 # Clone the repository
@@ -110,16 +201,16 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Quick Start
+# Quick Start
 
-### 1. Prepare Data
+## 1. Prepare Data
 
 Ensure you have the following structure:
 
 ```
 icir/
 ├── data/
-│   ├── icir/                       # i-CIR dataset
+│   ├── icir/                       # i-CIR dataset (local folder layout or WebDataset shards)
 │   └── laion_mean/                 # Pre-computed LAION means
 ├── corpora/
 │   ├── generic_subjects.csv        # Positive corpus (objects)
@@ -129,13 +220,16 @@ icir/
     └── dataset_1_sd_siglip.pkl.npy
 ```
 
-### 2. Extract Features
+## 2. Extract Features
 
-Extract features for the ILCIR dataset and text corpora:
+Extract features for the i-CIR dataset and text corpora:
 
 ```bash
-# Extract i-CIR dataset features
-python3 create_features.py --dataset icir --backbone clip --batch 512 --gpu 0
+# Extract i-CIR dataset features (local folder layout)
+python3 create_features.py --dataset icir --icir_source folder --backbone clip --batch 512 --gpu 0
+
+# Extract i-CIR dataset features (WebDataset shards)
+python3 create_features.py --dataset icir --icir_source wds --backbone clip --batch 512 --gpu 0
 
 # Extract corpus features
 python3 create_features.py --dataset corpus --backbone clip --batch 512 --gpu 0
@@ -143,7 +237,7 @@ python3 create_features.py --dataset corpus --backbone clip --batch 512 --gpu 0
 
 Features will be saved to `features/{backbone}_features/`.
 
-### 3. Run Retrieval
+## 3. Run Retrieval
 
 The easiest way is to use method presets with `--use_preset`:
 
@@ -180,7 +274,7 @@ python3 run_retrieval.py \
   --harris_lambda 0.1
 ```
 
-## Methods
+# Methods
 
 The codebase implements several retrieval methods:
 
@@ -190,7 +284,7 @@ The codebase implements several retrieval methods:
 - **image**: Image-only retrieval (ignores text)
 - **text**: Text-only retrieval (ignores image)
 
-## Key Parameters
+# Key Parameters
 
 - `--method`: Retrieval method (`basic`, `sum`, `product`, `image`, `text`)
 - `--backbone`: Vision-language model (`clip` for ViT-L/14, `siglip` for ViT-L-16-SigLIP-256)
@@ -207,7 +301,7 @@ The codebase implements several retrieval methods:
 - `--do_query_expansion`: Expand queries with retrieved images
 - `--normalize_similarities`: Apply min-max normalization using synthetic data
 
-## Corpus Files
+# Corpus Files
 
 Text corpora define semantic spaces for PCA projection:
 
@@ -216,7 +310,7 @@ Text corpora define semantic spaces for PCA projection:
 
 Corpora are CSV files with a single column of text descriptions, loaded from the `corpora/` directory.
 
-## Output
+# Output
 
 Results are saved to the specified results directory (default: `results/`):
 
@@ -232,7 +326,7 @@ Each result file includes:
 - Configuration parameters used (for basic method only)
 - Timestamp of the experiment
 
-## Results (mAP \%)
+# Results (mAP \%)
 
 | Method            | ImageNet-R |  NICO | Mini-DN |  LTLL |  i-CIR |
 |:------------------|-----------:|------:|--------:|------:|------:|
@@ -255,7 +349,7 @@ Each result file includes:
 
 † Without query expansion.
 
-## Project Structure
+# Project Structure
 
 ```
 icir/
@@ -273,9 +367,9 @@ icir/
 └── results/                   # Retrieval results (generated)
 ```
 
-## Citation
+# Citation
 
-If you use this code in your research, please cite:
+If you found BASIC and/or i-CIR useful in your research, please consider starring ⭐ us on GitHub and citing 📚 us in your research!
 
 ```bibtex
 @inproceedings{
@@ -287,16 +381,16 @@ If you use this code in your research, please cite:
 }
 ```
 
-## License
+# License
 
 - This code is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 - This dataset is licensed under the CC-BY-NC-SA License - see dataset's LICENSE file dor details.
 
-## Acknowledgments
+# Acknowledgments
 
 - Vision-language models via [OpenCLIP](https://github.com/mlfoundations/open_clip)
 - LAION-1M statistics for feature standardization
 
-## Contact
+# Contact
 
-For questions or issues, please open an issue on GitHub.
+For questions or issues, please open an issue on GitHub or contact Bill $\rightarrow$ vasileios.psomas@fel.cvut.cz.

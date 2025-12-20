@@ -188,6 +188,21 @@ class icir_dataset(Dataset):
         
         return image, img_path, instance, text
 
+def _try_total_items(dataloader):
+    # Works for classic torch DataLoader
+    if hasattr(dataloader, "dataset"):
+        try:
+            return len(dataloader.dataset)
+        except Exception:
+            pass
+
+    # If we attached a custom attribute (optional)
+    if hasattr(dataloader, "total_items"):
+        return dataloader.total_items
+
+    # Fallback: unknown
+    return None
+
 def save_icir(model, tokenizer, dataloader, save_file, device, contextual=None):
     """
     Extract and save icir dataset features.
@@ -207,12 +222,17 @@ def save_icir(model, tokenizer, dataloader, save_file, device, contextual=None):
     all_text_features = []
     
     is_query = "query" in save_file
-    total_items = len(dataloader.dataset)
-    
+    total_items = _try_total_items(dataloader)
+
+    processed = 0
     with torch.no_grad():
         for images, img_paths, instances, texts in dataloader:
-            current = len(all_image_filenames) + len(img_paths)
-            print(f"Processing {current}/{total_items} items...", end="\r")
+            processed += len(img_paths)
+
+            if total_items is not None:
+                print(f"Processing {processed}/{total_items} items...", end="\r")
+            else:
+                print(f"Processing {processed} items...", end="\r")
             
             # Encode images
             images = images.to(device)

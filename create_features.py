@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 import csv
+import json
 import argparse
 from PIL import Image
 from torch.utils.data import DataLoader
@@ -43,6 +44,36 @@ class ImageTextDataset(torch.utils.data.Dataset):
             image = self.transform(image)
         return image, text, 'no-domain', self.image_paths[idx]
 
+def make_icir_wds_loader(wds_root, split, preprocess, batch, num_workers):
+    import webdataset as wds
+    from pathlib import Path
+    from glob import glob
+
+    def _ensure_dict(js):
+        # WebDataset may already decode "json" into dict
+        if isinstance(js, dict):
+            return js
+        if isinstance(js, (bytes, bytearray)):
+            return json.loads(js.decode("utf-8"))
+        if isinstance(js, str):
+            return json.loads(js)
+        raise TypeError(f"Unexpected json type: {type(js)}")
+
+    shard_glob = str(Path(wds_root) / "webdataset" / split / f"{split}-*.tar")
+    shards = sorted(glob(shard_glob))
+    assert len(shards) > 0, f"No shards found. Expected something matching: {shard_glob}"
+
+    ds = (
+        wds.WebDataset(shards, shardshuffle=False)
+        .decode("pil")
+        .to_tuple("jpg;png;jpeg;webp", "json")
+        .map_tuple(
+            lambda img: preprocess(img.convert("RGB")),
+            _ensure_dict,
+        )
+        .map(lambda sample: (sample[0], sample[1]["img_path"], sample[1]["instance"], sample[1]["text"]))
+    )
+    return wds.WebLoader(ds, batch_size=batch, num_workers=num_workers)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Frature extraction parameters")
@@ -52,6 +83,7 @@ def parse_args():
         type=str,
         help="define dataset",
     )
+    parser.add_argument("--icir_source", choices=["folder", "wds"], default="folder")
     parser.add_argument(
         "--backbone",
         choices=["clip", "siglip"],
@@ -86,12 +118,30 @@ def main():
             save_file = os.path.join(save_dir, corpus_name + ".pkl")
             save_corpus_features(model=model, tokenizer=tokenizer, corpus_path=corpus_path, save_file=save_file, device=args.device)
     elif args.dataset.lower() == "icir":
-        query_dataset = icir_dataset(input_filename=os.path.join(".", "data", args.dataset.lower(), "query_files.csv"), preprocess=preprocess, root="./data")
-        database_dataset = icir_dataset(input_filename=os.path.join(".", "data", args.dataset.lower(), "database_files.csv"), preprocess=preprocess, root="./data")
-        query_dataloader = DataLoader(query_dataset, batch_size=args.batch, shuffle=False, num_workers=8, pin_memory=True)
-        database_dataloader = DataLoader(database_dataset, batch_size=args.batch, shuffle=False, num_workers=8, pin_memory=True)
-        save_icir(model=model, dataloader=query_dataloader, tokenizer=tokenizer, save_file=os.path.join(save_dir, f"query_{args.dataset}_features.pkl"), device=args.device, contextual="./corpora/generic_subjects.csv")
-        save_icir(model=model, dataloader=database_dataloader, tokenizer=tokenizer, save_file=os.path.join(save_dir, f"database_{args.dataset}_features.pkl"), device=args.device)
+        if args.icir_source == "folder": # local folder layout
+            query_dataset = icir_dataset(
+                input_filename=os.path.join(".", "data", args.dataset.lower(), "query_files.csv"),
+                preprocess=preprocess,
+                root="./data",
+            )
+            database_dataset = icir_dataset(
+                input_filename=os.path.join(".", "data", args.dataset.lower(), "database_files.csv"),
+                preprocess=preprocess,
+                root="./data",
+            )
+            query_dataloader = DataLoader(query_dataset, batch_size=args.batch, shuffle=False, num_workers=8, pin_memory=True)
+            database_dataloader = DataLoader(database_dataset, batch_size=args.batch, shuffle=False, num_workers=8, pin_memory=True)
+
+        else:  # wds
+            query_dataloader = make_icir_wds_loader("./data/icir/", "query", preprocess, args.batch, num_workers=1)
+            database_dataloader = make_icir_wds_loader("./data/icir/", "database", preprocess, args.batch, num_workers=1)
+
+        save_icir(model=model, dataloader=query_dataloader, tokenizer=tokenizer,
+                save_file=os.path.join(save_dir, f"query_{args.dataset}_features.pkl"),
+                device=args.device, contextual="./corpora/generic_subjects.csv")
+        save_icir(model=model, dataloader=database_dataloader, tokenizer=tokenizer,
+                save_file=os.path.join(save_dir, f"database_{args.dataset}_features.pkl"),
+                device=args.device)
 
 if __name__ == "__main__":
     main()
