@@ -42,6 +42,7 @@ Official implementation of our **B**aseline **A**pproach for **S**urpr**I**singl
 15. [Contact](#contact)
 
 # News
+- **20/12/2025**: HuggingFace WebDataset is now supported. You can find i-CIR [[`here`](https://huggingface.co/datasets/billpsomas/icir)].
 - **5/12/2025**: i-CIR is presented at NeurIPS 2025! 🎉 Go now through [[`slides`](.github/icir_poster.png)].
 
 # Overview
@@ -215,7 +216,7 @@ icir/
 ├── corpora/
 │   ├── generic_subjects.csv        # Positive corpus (objects)
 │   └── generic_styles.csv          # Negative corpus (styles)
-└── synthetic_data/                 # Min-max normalization data
+└── synthetic_data/                 # Score normalization data
     ├── dataset_1_sd_clip.pkl.npy
     └── dataset_1_sd_siglip.pkl.npy
 ```
@@ -294,12 +295,12 @@ The codebase implements several retrieval methods:
 - `--num_principal_components_for_projection`: PCA components, >1 for exact count or <1 for energy threshold (default: 250)
 - `--aa`: Negative corpus weight in contrastive PCA (default: 0.2)
 - `--harris_lambda`: Harris fusion parameter (default: 0.1)
-- `--contextualize`: Add "a photo of a" prefix to text queries
+- `--contextualize`: Add corpus objects to the text query to contextualize the query
 - `--standardize_features`: Center features before projection
 - `--use_laion_mean`: Use pre-computed LAION mean for centering
 - `--project_features`: Apply PCA projection
 - `--do_query_expansion`: Expand queries with retrieved images
-- `--normalize_similarities`: Apply min-max normalization using synthetic data
+- `--normalize_similarities`: Apply score normalization using synthetic data
 
 # Corpus Files
 
