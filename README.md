@@ -27,7 +27,7 @@ Official implementation of our **B**aseline **A**pproach for **S**urpr**I**singl
 # Contents
 1. [News](#news)
 2. [Overview](#overview)
-3. [Download the i-CIR dataset](#download-the-i-CIR-dataset)
+3. [Download the i-CIR dataset](#download-the-i-cir-dataset)
 4. [Installation](#installation)
 5. [Quick Start](#quick-start)
 6. [Methods](#methods)
@@ -42,8 +42,8 @@ Official implementation of our **B**aseline **A**pproach for **S**urpr**I**singl
 15. [Contact](#contact)
 
 # News
-- **20/12/2025**: HuggingFace WebDataset is now supported. You can find i-CIR [[`here`](https://huggingface.co/datasets/billpsomas/icir)].
-- **5/12/2025**: i-CIR is presented at NeurIPS 2025! 🎉 Go now through [[`slides`](.github/icir_poster.png)].
+- **20/12/2025**: 🤗 HuggingFace WebDataset is now supported. You can now find i-CIR [[`here`](https://huggingface.co/datasets/billpsomas/icir)].
+- **5/12/2025**: i-CIR is presented at NeurIPS 2025! 🎉 Go now through [[`poster`](.github/icir_poster.png)].
 
 # Overview
 
@@ -97,7 +97,7 @@ Performance peaks at interior text–image fusion weights ($\lambda$) and shows 
 <img width="80%" alt="EP illustration" src=".github/compositional.png">
 </p>
 
-# 🔽 Download the i-CIR dataset
+# Download the i-CIR dataset
 
 i-CIR is available in two equivalent formats:
 
@@ -385,7 +385,7 @@ If you found BASIC and/or i-CIR useful in your research, please consider starrin
 # License
 
 - This code is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-- This dataset is licensed under the CC-BY-NC-SA License - see dataset's LICENSE file dor details.
+- This dataset is licensed under the CC-BY-NC-SA License - see dataset's LICENSE file for details.
 
 # Acknowledgments
 
