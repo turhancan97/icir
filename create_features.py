@@ -120,14 +120,14 @@ def main():
     elif args.dataset.lower() == "icir":
         if args.icir_source == "folder": # local folder layout
             query_dataset = icir_dataset(
-                input_filename=os.path.join(".", "data", args.dataset.lower(), "query_files.csv"),
+                input_filename=os.path.join("/shared/sets/datasets/vision", args.dataset.lower(), "query_files.csv"),
                 preprocess=preprocess,
-                root="./data",
+                root="/shared/sets/datasets/vision",
             )
             database_dataset = icir_dataset(
-                input_filename=os.path.join(".", "data", args.dataset.lower(), "database_files.csv"),
+                input_filename=os.path.join("/shared/sets/datasets/vision", args.dataset.lower(), "database_files.csv"),
                 preprocess=preprocess,
-                root="./data",
+                root="/shared/sets/datasets/vision",
             )
             query_dataloader = DataLoader(query_dataset, batch_size=args.batch, shuffle=False, num_workers=8, pin_memory=True)
             database_dataloader = DataLoader(database_dataset, batch_size=args.batch, shuffle=False, num_workers=8, pin_memory=True)

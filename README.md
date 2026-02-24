@@ -246,6 +246,15 @@ The easiest way is to use method presets with `--use_preset`:
 # Full BASIC method (recommended)
 python3 run_retrieval.py --method basic --use_preset
 
+# Full MA-HF method (query-adaptive Harris penalty)
+python3 run_retrieval.py --method mahf --use_preset
+
+# Full QASP method (query-adaptive dynamic projection)
+python3 run_retrieval.py --method qasp --use_preset
+
+# Full TG-BQE method (text-guided bimodal query expansion)
+python3 run_retrieval.py --method tgbqe --use_preset
+
 # Baseline methods
 python3 run_retrieval.py --method sum --use_preset
 python3 run_retrieval.py --method product --use_preset
@@ -275,19 +284,215 @@ python3 run_retrieval.py \
   --harris_lambda 0.1
 ```
 
+TG-BQE with explicit query-expansion settings:
+
+```bash
+python3 run_retrieval.py \
+  --method tgbqe \
+  --backbone clip \
+  --dataset icir \
+  --results_dir results/ \
+  --specified_corpus generic_subjects \
+  --specified_ncorpus generic_styles \
+  --num_principal_components_for_projection 250 \
+  --aa 0.2 \
+  --standardize_features \
+  --use_laion_mean \
+  --project_features \
+  --do_query_expansion \
+  --tgbqe_k 25 \
+  --tgbqe_gamma 0.1 \
+  --contextualize \
+  --normalize_similarities \
+  --path_to_synthetic_data ./synthetic_data \
+  --harris_lambda 0.1
+```
+
+MA-HF with explicit adaptive-penalty settings:
+
+```bash
+python3 run_retrieval.py \
+  --method mahf \
+  --backbone clip \
+  --dataset icir \
+  --results_dir results/ \
+  --specified_corpus generic_subjects \
+  --specified_ncorpus generic_styles \
+  --num_principal_components_for_projection 250 \
+  --aa 0.2 \
+  --standardize_features \
+  --use_laion_mean \
+  --project_features \
+  --do_query_expansion \
+  --contextualize \
+  --normalize_similarities \
+  --path_to_synthetic_data ./synthetic_data \
+  --mahf_mapping exp \
+  --mahf_tau 0.2 \
+  --mahf_lambda_min 0.0 \
+  --mahf_lambda_max 0.1
+```
+
+QASP with explicit adaptive-projection settings:
+
+```bash
+python3 run_retrieval.py \
+  --method qasp \
+  --backbone clip \
+  --dataset icir \
+  --results_dir results/ \
+  --specified_corpus generic_subjects \
+  --specified_ncorpus generic_styles \
+  --num_principal_components_for_projection 250 \
+  --aa 0.2 \
+  --qasp_beta 2.0 \
+  --standardize_features \
+  --use_laion_mean \
+  --project_features \
+  --do_query_expansion \
+  --contextualize \
+  --normalize_similarities \
+  --path_to_synthetic_data ./synthetic_data \
+  --harris_lambda 0.1
+```
+
 # Methods
 
 The codebase implements several retrieval methods:
 
 - **basic**: Full decomposition method with all components (PCA projection, query expansion, Harris fusion)
+- **mahf**: Modality-Adaptive Harris Fusion with query-conditioned penalty
+- **qasp**: Query-Adaptive Dynamic Subspace Projection for text-conditioned style suppression
+- **tgbqe**: Text-Guided Bimodal Query Expansion to reduce semantic drift in QE
 - **sum**: Simple sum of image and text similarities
 - **product**: Simple product of image and text similarities  
 - **image**: Image-only retrieval (ignores text)
 - **text**: Text-only retrieval (ignores image)
 
+## Modality-Adaptive Harris Fusion (MA-HF)
+
+MA-HF addresses a key limitation of fixed-penalty Harris fusion: composed queries do not always require equal modality balance.
+
+Given centered query image and text embeddings, `v_q` and `t_q`, we compute cross-modal alignment:
+
+```math
+a_q = \cos(v_q, t_q)
+```
+
+We normalize alignment to `[0, 1]`:
+
+```math
+\tilde{a}_q = \frac{a_q + 1}{2}
+```
+
+Then MA-HF replaces fixed `\lambda` with query-adaptive `\lambda_q \in [\lambda_{min}, \lambda_{max}]`.
+
+Exponential mapping (`--mahf_mapping exp`):
+
+```math
+g(\tilde{a}_q;\tau)=\frac{\exp((\tilde{a}_q-1)/\tau)-\exp(-1/\tau)}{1-\exp(-1/\tau)}
+```
+
+```math
+\lambda_q = \lambda_{min}+(\lambda_{max}-\lambda_{min})\cdot g(\tilde{a}_q;\tau)
+```
+
+Sigmoid mapping (`--mahf_mapping sigmoid`):
+
+```math
+g(\tilde{a}_q;\tau)=\sigma((\tilde{a}_q-0.5)/\tau)
+```
+
+```math
+\lambda_q = \lambda_{min}+(\lambda_{max}-\lambda_{min})\cdot g(\tilde{a}_q;\tau)
+```
+
+Final MA-HF score for each query/database pair:
+
+```math
+S_{MAHF}=s_{img}\cdot s_{txt}-\lambda_q\cdot(s_{img}+s_{txt})^2
+```
+
+This keeps the framework training-free while adapting penalty strength to each query at inference time.
+
+## Query-Adaptive Dynamic Subspace Projection (QASP)
+
+QASP replaces static negative covariance in BASIC projection with a query-conditioned dynamic covariance.
+
+Let centered query text embedding be `\bar{q}^t \in \mathbb{R}^d`, and centered negative corpus matrix
+`X_- \in \mathbb{R}^{N \times d}` with rows `\bar{x}_i`.
+
+Cosine similarities:
+
+```math
+s_i = \cos(\bar{q}^t, \bar{x}_i)
+```
+
+ReLU-power weighting (`\beta \ge 1`) with normalization:
+
+```math
+w_i = \frac{\mathrm{ReLU}(s_i)^\beta}{\sum_{j=1}^{N}\mathrm{ReLU}(s_j)^\beta}
+```
+
+Dynamic negative covariance:
+
+```math
+C_{-(dynamic)} = \sum_{i=1}^{N} w_i (\bar{x}_i \bar{x}_i^\top)
+```
+
+Final dynamic covariance using static positive covariance `C_+` and `\alpha`:
+
+```math
+C_{dynamic} = (1-\alpha)C_+ - \alpha C_{-(dynamic)}
+```
+
+Eigendecomposition of `C_{dynamic}` keeps top-`k` eigenvectors for positive eigenvalues only.
+If no positive eigenvalues exist, QASP falls back to identity projection.
+If all `\mathrm{ReLU}(s_i)` are zero, QASP uses uniform weights (`w_i=1/N`) to avoid division by zero.
+
+Implementation detail: QASP uses existing `--aa` as `\alpha` and `--num_principal_components_for_projection` as `k`.
+
+## Text-Guided Bimodal Query Expansion (TG-BQE)
+
+TG-BQE replaces visual-only query expansion with text-guided, bimodal neighbor selection.
+
+Given centered visual query `\bar{q}^v`, centered text query `\bar{q}^t`, centered database `\bar{X}^v`,
+projection basis `P`, and Harris penalty `\lambda`:
+
+```math
+s^v = \bar{X}^v (P P^\top \bar{q}^v), \qquad s^t = \bar{X}^v \bar{q}^t
+```
+
+Min-based normalization (when enabled):
+
+```math
+\tilde{s}^v = (s^v - s_{min}^v)/|s_{min}^v|,\qquad
+\tilde{s}^t = (s^t - s_{min}^t)/|s_{min}^t|
+```
+
+Preliminary fusion score:
+
+```math
+\tilde{s}^f = \tilde{s}^v\tilde{s}^t - \lambda(\tilde{s}^v+\tilde{s}^t)^2
+```
+
+Take top-`k` by `\tilde{s}^f`, append original query as anchor, and compute softmax weights:
+
+```math
+w_i^{TG} = \frac{\exp(\gamma \tilde{s}_i^f)}{\sum_j \exp(\gamma \tilde{s}_j^f)}
+```
+
+Expanded visual query:
+
+```math
+\tilde{q}_{TG}^v = \sum_i w_i^{TG}\bar{z}_i^v
+```
+
+TG-BQE uses contextualized text features and keeps expansion anchored by appending the original query with the max top-`k` fusion score.
+
 # Key Parameters
 
-- `--method`: Retrieval method (`basic`, `sum`, `product`, `image`, `text`)
+- `--method`: Retrieval method (`basic`, `mahf`, `qasp`, `tgbqe`, `sum`, `product`, `image`, `text`)
 - `--backbone`: Vision-language model (`clip` for ViT-L/14, `siglip` for ViT-L-16-SigLIP-256)
 - `--use_preset`: Use predefined method configurations (recommended)
 - `--specified_corpus`: Positive corpus for projection (default: `generic_subjects`)
@@ -301,6 +506,13 @@ The codebase implements several retrieval methods:
 - `--project_features`: Apply PCA projection
 - `--do_query_expansion`: Expand queries with retrieved images
 - `--normalize_similarities`: Apply score normalization using synthetic data
+- `--mahf_mapping`: MA-HF penalty mapping (`exp`, `sigmoid`)
+- `--mahf_tau`: MA-HF temperature controlling transition sharpness
+- `--mahf_lambda_min`: Lower bound of adaptive penalty
+- `--mahf_lambda_max`: Upper bound of adaptive penalty
+- `--qasp_beta`: QASP ReLU exponent for negative-style weighting (`>=1`)
+- `--tgbqe_k`: Number of expansion neighbors in TG-BQE (default: 25)
+- `--tgbqe_gamma`: Softmax temperature scaling for TG-BQE weighting (default: 0.1)
 
 # Corpus Files
 
@@ -317,15 +529,24 @@ Results are saved to the specified results directory (default: `results/`):
 
 ```
 results/
-└── icir/
-    └── {method_variant}/
-        └── mAP_table.csv          # Mean Average Precision results
+├── mAP/
+│   └── {backbone}_{dataset}_{method}.txt
+├── APs/
+│   └── {backbone}_{dataset}_{method}.csv
+├── TGBQE/
+│   └── {backbone}_{dataset}_tgbqe.csv
+├── QASP/
+│   └── {backbone}_{dataset}_qasp.csv
+└── MAHF/
+    └── {backbone}_{dataset}_mahf.csv
 ```
 
 Each result file includes:
-- mAP score for the retrieval method
-- Configuration parameters used (for basic method only)
-- Timestamp of the experiment
+- mAP/mmAP/minmAP summary (`results/mAP`)
+- per-query AP values (`results/APs`)
+- TG-BQE per-query expansion diagnostics (`results/TGBQE`, TG-BQE only)
+- QASP per-query adaptive projection diagnostics (`results/QASP`, QASP only)
+- MA-HF per-query alignment and adaptive penalty diagnostics (`results/MAHF`, MA-HF only)
 
 # Results (mAP \%)
 

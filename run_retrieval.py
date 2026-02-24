@@ -31,6 +31,57 @@ METHOD_PRESETS = {
         "path_to_synthetic_data": "./synthetic_data",
         "harris_lambda": 0.1
     },
+    "mahf": {
+        "description": "Modality-Adaptive Harris Fusion (query-adaptive penalty)",
+        "contextualize": True,
+        "specified_corpus": "generic_subjects",
+        "specified_ncorpus": "generic_styles",
+        "aa": 0.2,
+        "num_principal_components_for_projection": 250.0,
+        "standardize_features": True,
+        "use_laion_mean": True,
+        "project_features": True,
+        "do_query_expansion": True,
+        "normalize_similarities": True,
+        "path_to_synthetic_data": "./synthetic_data",
+        "mahf_mapping": "exp",
+        "mahf_tau": 0.2,
+        "mahf_lambda_min": 0.0,
+        "mahf_lambda_max": 0.1
+    },
+    "qasp": {
+        "description": "Query-Adaptive Dynamic Subspace Projection (QASP)",
+        "contextualize": True,
+        "specified_corpus": "generic_subjects",
+        "specified_ncorpus": "generic_styles",
+        "aa": 0.2,
+        "qasp_beta": 2.0,
+        "num_principal_components_for_projection": 250.0,
+        "standardize_features": True,
+        "use_laion_mean": True,
+        "project_features": True,
+        "do_query_expansion": True,
+        "normalize_similarities": True,
+        "path_to_synthetic_data": "./synthetic_data",
+        "harris_lambda": 0.1
+    },
+    "tgbqe": {
+        "description": "Text-Guided Bimodal Query Expansion (TG-BQE)",
+        "contextualize": True,
+        "specified_corpus": "generic_subjects",
+        "specified_ncorpus": "generic_styles",
+        "aa": 0.2,
+        "num_principal_components_for_projection": 250.0,
+        "standardize_features": True,
+        "use_laion_mean": True,
+        "project_features": True,
+        "do_query_expansion": True,
+        "normalize_similarities": True,
+        "path_to_synthetic_data": "./synthetic_data",
+        "harris_lambda": 0.1,
+        "tgbqe_k": 25,
+        "tgbqe_gamma": 1000.0
+    },
     "sum": {
         "description": "Simple sum fusion of image and text similarities",
     },
@@ -54,7 +105,7 @@ def parse_args():
     parser.add_argument("--gpu", default=0, type=int, help="GPU id")
     parser.add_argument("--dataset", default="icir", type=str, help="Dataset name")
     parser.add_argument("--backbone", choices=["clip", "siglip"], default="clip", type=str, help="Vision-language model backbone")
-    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic"], type=str, default="basic", help="Retrieval method")
+    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic", "mahf", "qasp", "tgbqe"], type=str, default="basic", help="Retrieval method")
     
     # Text processing
     parser.add_argument("--contextualize", action="store_true", help="Contextualize text queries with corpus")
@@ -63,6 +114,7 @@ def parse_args():
     parser.add_argument("--specified_corpus", type=str, default="generic_subjects", help="Positive corpus for PCA projection")
     parser.add_argument("--specified_ncorpus", type=str, default="generic_styles", help="Negative corpus for PCA projection")
     parser.add_argument("--aa", type=float, default=0.2, help="Negative corpus weight in contrastive PCA")
+    parser.add_argument("--qasp_beta", type=float, default=2.0, help="QASP ReLU exponent (must be >=1)")
     parser.add_argument("--num_principal_components_for_projection", type=float, default=250.0, 
                         help="Number of PCA components (>1) or energy threshold (<1)")
     
@@ -70,12 +122,24 @@ def parse_args():
     parser.add_argument("--standardize_features", action="store_true", help="Standardize features before projection")
     parser.add_argument("--use_laion_mean", action="store_true", help="Use pre-computed LAION mean for standardization")
     parser.add_argument("--project_features", action="store_true", help="Apply PCA projection")
-    
+
     # Similarity refinement
     parser.add_argument("--do_query_expansion", action="store_true", help="Expand queries with top retrieved samples")
+    parser.add_argument("--tgbqe_k", type=int, default=25, help="Number of TG-BQE expansion neighbors")
+    parser.add_argument("--tgbqe_gamma", type=float, default=0.1, help="TG-BQE softmax temperature scale")
     parser.add_argument("--normalize_similarities", action="store_true", help="Min-max normalize similarities")
     parser.add_argument("--path_to_synthetic_data", type=str, default=None, help="Path to synthetic normalization data")
     parser.add_argument("--harris_lambda", type=float, default=0.1, help="Harris corner detection lambda for fusion")
+
+    # MA-HF specific settings
+    parser.add_argument("--mahf_mapping", choices=["exp", "sigmoid"], default="exp",
+                        help="Adaptive penalty mapping for MA-HF")
+    parser.add_argument("--mahf_tau", type=float, default=0.2,
+                        help="Temperature for MA-HF adaptive mapping")
+    parser.add_argument("--mahf_lambda_min", type=float, default=0.0,
+                        help="Lower bound for MA-HF adaptive Harris penalty")
+    parser.add_argument("--mahf_lambda_max", type=float, default=0.1,
+                        help="Upper bound for MA-HF adaptive Harris penalty")
     
     # Output
     parser.add_argument("--results_dir", type=str, default="results", help="Directory to save results")
@@ -117,24 +181,30 @@ def apply_method_preset(args):
     parser.add_argument("--gpu", default=0, type=int)
     parser.add_argument("--dataset", choices=["icir"], default="icir", type=str)
     parser.add_argument("--backbone", choices=["clip", "siglip"], default="clip", type=str)
-    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic"], type=str, default="basic")
+    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic", "mahf", "qasp", "tgbqe"], type=str, default="basic")
     parser.add_argument("--contextualize", action="store_true")
     parser.add_argument("--specified_corpus", type=str, default="generic_subjects")
     parser.add_argument("--specified_ncorpus", type=str, default="generic_styles")
     parser.add_argument("--aa", type=float, default=0.2)
+    parser.add_argument("--qasp_beta", type=float, default=2.0)
     parser.add_argument("--num_principal_components_for_projection", type=float, default=250.0)
     parser.add_argument("--standardize_features", action="store_true")
     parser.add_argument("--use_laion_mean", action="store_true")
     parser.add_argument("--project_features", action="store_true")
     parser.add_argument("--do_query_expansion", action="store_true")
+    parser.add_argument("--tgbqe_k", type=int, default=25)
+    parser.add_argument("--tgbqe_gamma", type=float, default=0.1)
     parser.add_argument("--normalize_similarities", action="store_true")
     parser.add_argument("--path_to_synthetic_data", type=str, default=None)
     parser.add_argument("--harris_lambda", type=float, default=0.1)
+    parser.add_argument("--mahf_mapping", choices=["exp", "sigmoid"], default="exp")
+    parser.add_argument("--mahf_tau", type=float, default=0.2)
+    parser.add_argument("--mahf_lambda_min", type=float, default=0.0)
+    parser.add_argument("--mahf_lambda_max", type=float, default=0.1)
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument("--use_preset", action="store_true")
     
     # Parse with just defaults to compare
-    import sys
     defaults = parser.parse_args([])
     
     # Apply preset values, but preserve user-provided overrides
@@ -216,11 +286,12 @@ def process_instance(instance, data, args):
     db_texts = [data["database"]["texts"][i] for i in db_indices]
     
     # Compute rankings
-    rankings = calculate_rankings(
+    rankings, aux = calculate_rankings(
         args=args,
         image_features=query_img_feats,
         text_features=query_txt_feats,
-        database_features=db_feats
+        database_features=db_feats,
+        return_aux=True
     )
     
     # Calculate metrics
@@ -229,6 +300,37 @@ def process_instance(instance, data, args):
         query_texts, db_instances, db_texts
     )
     
+    alignments = aux.get("alignment")
+    lambda_qs = aux.get("lambda_q")
+    qasp_active_negatives = aux.get("qasp_active_negatives")
+    qasp_weight_entropy = aux.get("qasp_weight_entropy")
+    qasp_max_weight = aux.get("qasp_max_weight")
+    qasp_min_weight = aux.get("qasp_min_weight")
+    qasp_num_positive_eigs = aux.get("qasp_num_positive_eigs")
+    tgbqe_topk_mean_fusion = aux.get("tgbqe_topk_mean_fusion")
+    tgbqe_anchor_weight = aux.get("tgbqe_anchor_weight")
+    tgbqe_weight_entropy = aux.get("tgbqe_weight_entropy")
+    if alignments is not None:
+        alignments = alignments.tolist()
+    if lambda_qs is not None:
+        lambda_qs = lambda_qs.tolist()
+    if qasp_active_negatives is not None:
+        qasp_active_negatives = qasp_active_negatives.tolist()
+    if qasp_weight_entropy is not None:
+        qasp_weight_entropy = qasp_weight_entropy.tolist()
+    if qasp_max_weight is not None:
+        qasp_max_weight = qasp_max_weight.tolist()
+    if qasp_min_weight is not None:
+        qasp_min_weight = qasp_min_weight.tolist()
+    if qasp_num_positive_eigs is not None:
+        qasp_num_positive_eigs = qasp_num_positive_eigs.tolist()
+    if tgbqe_topk_mean_fusion is not None:
+        tgbqe_topk_mean_fusion = tgbqe_topk_mean_fusion.tolist()
+    if tgbqe_anchor_weight is not None:
+        tgbqe_anchor_weight = tgbqe_anchor_weight.tolist()
+    if tgbqe_weight_entropy is not None:
+        tgbqe_weight_entropy = tgbqe_weight_entropy.tolist()
+
     return {
         "rankings": rankings,
         "APs": metrics["APs"],
@@ -237,6 +339,16 @@ def process_instance(instance, data, args):
         "query_texts": query_texts,
         "query_instances": query_instances,
         "db_paths": db_paths,
+        "alignments": alignments,
+        "lambda_qs": lambda_qs,
+        "qasp_active_negatives": qasp_active_negatives,
+        "qasp_weight_entropy": qasp_weight_entropy,
+        "qasp_max_weight": qasp_max_weight,
+        "qasp_min_weight": qasp_min_weight,
+        "qasp_num_positive_eigs": qasp_num_positive_eigs,
+        "tgbqe_topk_mean_fusion": tgbqe_topk_mean_fusion,
+        "tgbqe_anchor_weight": tgbqe_anchor_weight,
+        "tgbqe_weight_entropy": tgbqe_weight_entropy,
         "mean_AP": np.mean(metrics["APs"]),
         "min_AP": np.min(metrics["APs"])
     }
@@ -309,15 +421,82 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
     all_APs = []
     mean_APs_per_instance = []
     min_APs_per_instance = []
+    all_alignments = []
+    all_lambda_qs = []
+    all_qasp_active_negatives = []
+    all_qasp_weight_entropy = []
+    all_qasp_max_weight = []
+    all_qasp_min_weight = []
+    all_qasp_num_positive_eigs = []
+    all_tgbqe_topk_mean_fusion = []
+    all_tgbqe_anchor_weight = []
+    all_tgbqe_weight_entropy = []
+    is_mahf = args.method.lower() == "mahf"
+    is_qasp = args.method.lower() == "qasp"
+    is_tgbqe = args.method.lower() == "tgbqe"
     
     for result in instance_results:
         all_APs.extend(result["APs"])
         mean_APs_per_instance.append(result["mean_AP"])
         min_APs_per_instance.append(result["min_AP"])
+        if is_mahf and result["alignments"] is not None and result["lambda_qs"] is not None:
+            all_alignments.extend(result["alignments"])
+            all_lambda_qs.extend(result["lambda_qs"])
+        if is_qasp and result["qasp_active_negatives"] is not None:
+            all_qasp_active_negatives.extend(result["qasp_active_negatives"])
+            all_qasp_weight_entropy.extend(result["qasp_weight_entropy"])
+            all_qasp_max_weight.extend(result["qasp_max_weight"])
+            all_qasp_min_weight.extend(result["qasp_min_weight"])
+            all_qasp_num_positive_eigs.extend(result["qasp_num_positive_eigs"])
+        if is_tgbqe and result["tgbqe_topk_mean_fusion"] is not None:
+            all_tgbqe_topk_mean_fusion.extend(result["tgbqe_topk_mean_fusion"])
+            all_tgbqe_anchor_weight.extend(result["tgbqe_anchor_weight"])
+            all_tgbqe_weight_entropy.extend(result["tgbqe_weight_entropy"])
     
     mAP = round(np.mean(all_APs) * 100, 2)
     mmAP = round(np.mean(mean_APs_per_instance) * 100, 2)  # Mean of instance means
     minmAP = round(np.mean(min_APs_per_instance) * 100, 2)  # Mean of instance mins
+
+    mahf_stats = {}
+    if is_mahf and len(all_alignments) > 0:
+        alignments_np = np.array(all_alignments, dtype=np.float32)
+        lambda_qs_np = np.array(all_lambda_qs, dtype=np.float32)
+        mahf_stats = {
+            "alignment_mean": float(np.mean(alignments_np)),
+            "alignment_std": float(np.std(alignments_np)),
+            "alignment_min": float(np.min(alignments_np)),
+            "alignment_max": float(np.max(alignments_np)),
+            "lambda_mean": float(np.mean(lambda_qs_np)),
+            "lambda_std": float(np.std(lambda_qs_np)),
+            "lambda_min": float(np.min(lambda_qs_np)),
+            "lambda_max": float(np.max(lambda_qs_np)),
+        }
+
+    qasp_stats = {}
+    if is_qasp and len(all_qasp_active_negatives) > 0:
+        active_np = np.array(all_qasp_active_negatives, dtype=np.float32)
+        entropy_np = np.array(all_qasp_weight_entropy, dtype=np.float32)
+        maxw_np = np.array(all_qasp_max_weight, dtype=np.float32)
+        minw_np = np.array(all_qasp_min_weight, dtype=np.float32)
+        eigs_np = np.array(all_qasp_num_positive_eigs, dtype=np.float32)
+        qasp_stats = {
+            "active_negatives_mean": float(np.mean(active_np)),
+            "weight_entropy_mean": float(np.mean(entropy_np)),
+            "max_weight_mean": float(np.mean(maxw_np)),
+            "min_weight_mean": float(np.mean(minw_np)),
+            "num_positive_eigs_mean": float(np.mean(eigs_np)),
+        }
+
+    tgbqe_stats = {}
+    if is_tgbqe and len(all_tgbqe_topk_mean_fusion) > 0:
+        topk_np = np.array(all_tgbqe_topk_mean_fusion, dtype=np.float32)
+        anchor_np = np.array(all_tgbqe_anchor_weight, dtype=np.float32)
+        entropy_np = np.array(all_tgbqe_weight_entropy, dtype=np.float32)
+        tgbqe_stats = {
+            "topk_mean_fusion_mean": float(np.mean(topk_np)),
+            "anchor_weight_mean": float(np.mean(anchor_np)),
+            "weight_entropy_mean": float(np.mean(entropy_np)),
+        }
     
     print(f"\n{'='*60}")
     print(f"Results Summary:")
@@ -329,6 +508,23 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
     print(f"  mAP: {mAP}%")
     print(f"  mmAP (mean per instance): {mmAP}%")
     print(f"  minmAP (mean of min per instance): {minmAP}%")
+    if mahf_stats:
+        print(f"  MA-HF alignment mean/std/min/max: "
+              f"{mahf_stats['alignment_mean']:.4f} / {mahf_stats['alignment_std']:.4f} / "
+              f"{mahf_stats['alignment_min']:.4f} / {mahf_stats['alignment_max']:.4f}")
+        print(f"  MA-HF lambda(q) mean/std/min/max: "
+              f"{mahf_stats['lambda_mean']:.4f} / {mahf_stats['lambda_std']:.4f} / "
+              f"{mahf_stats['lambda_min']:.4f} / {mahf_stats['lambda_max']:.4f}")
+    if qasp_stats:
+        print(f"  QASP active negatives (mean): {qasp_stats['active_negatives_mean']:.2f}")
+        print(f"  QASP weight entropy (mean): {qasp_stats['weight_entropy_mean']:.4f}")
+        print(f"  QASP max/min weight (mean): "
+              f"{qasp_stats['max_weight_mean']:.4f} / {qasp_stats['min_weight_mean']:.4f}")
+        print(f"  QASP positive eigenvalues (mean): {qasp_stats['num_positive_eigs_mean']:.2f}")
+    if tgbqe_stats:
+        print(f"  TG-BQE top-k fusion (mean): {tgbqe_stats['topk_mean_fusion_mean']:.4f}")
+        print(f"  TG-BQE anchor weight (mean): {tgbqe_stats['anchor_weight_mean']:.4f}")
+        print(f"  TG-BQE weight entropy (mean): {tgbqe_stats['weight_entropy_mean']:.4f}")
     print(f"  Time: {elapsed_time:.1f}s")
     print(f"{'='*60}\n")
     
@@ -346,16 +542,25 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
         
         # Exclude runtime-specific arguments
         excluded_keys = {'results_dir', 'gpu', 'device'}
+        basic_specific_keys = {
+            'specified_corpus', 'specified_ncorpus', 'aa',
+            'qasp_beta', 'num_principal_components_for_projection', 'standardize_features',
+            'use_laion_mean', 'project_features', 'do_query_expansion',
+            'tgbqe_k', 'tgbqe_gamma', 'normalize_similarities', 'path_to_synthetic_data', 'harris_lambda'
+        }
+        mahf_specific_keys = {'mahf_mapping', 'mahf_tau', 'mahf_lambda_min', 'mahf_lambda_max'}
+        qasp_specific_keys = {'qasp_beta'}
+        tgbqe_specific_keys = {'tgbqe_k', 'tgbqe_gamma'}
         
         # For non-basic methods, also exclude basic-specific parameters
-        if args.method.lower() != 'basic':
-            basic_specific_keys = {
-                'specified_corpus', 'specified_ncorpus', 'aa',
-                'num_principal_components_for_projection', 'standardize_features',
-                'use_laion_mean', 'project_features', 'do_query_expansion',
-                'normalize_similarities', 'path_to_synthetic_data', 'harris_lambda'
-            }
+        if args.method.lower() not in {'basic', 'mahf', 'qasp', 'tgbqe'}:
             excluded_keys.update(basic_specific_keys)
+        if args.method.lower() != 'mahf':
+            excluded_keys.update(mahf_specific_keys)
+        if args.method.lower() != 'qasp':
+            excluded_keys.update(qasp_specific_keys)
+        if args.method.lower() != 'tgbqe':
+            excluded_keys.update(tgbqe_specific_keys)
         
         filtered_dict = {k: v for k, v in args_dict.items() if k not in excluded_keys}
         max_key_len = max(len(key) for key in filtered_dict.keys())
@@ -369,6 +574,25 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
         f.write(f"map: {mAP}\n")
         f.write(f"mmap: {mmAP}\n")
         f.write(f"minmap: {minmAP}\n")
+        if mahf_stats:
+            f.write(f"alignment_mean: {mahf_stats['alignment_mean']:.6f}\n")
+            f.write(f"alignment_std: {mahf_stats['alignment_std']:.6f}\n")
+            f.write(f"alignment_min: {mahf_stats['alignment_min']:.6f}\n")
+            f.write(f"alignment_max: {mahf_stats['alignment_max']:.6f}\n")
+            f.write(f"lambda_mean: {mahf_stats['lambda_mean']:.6f}\n")
+            f.write(f"lambda_std: {mahf_stats['lambda_std']:.6f}\n")
+            f.write(f"lambda_min: {mahf_stats['lambda_min']:.6f}\n")
+            f.write(f"lambda_max: {mahf_stats['lambda_max']:.6f}\n")
+        if qasp_stats:
+            f.write(f"qasp_active_negatives_mean: {qasp_stats['active_negatives_mean']:.6f}\n")
+            f.write(f"qasp_weight_entropy_mean: {qasp_stats['weight_entropy_mean']:.6f}\n")
+            f.write(f"qasp_max_weight_mean: {qasp_stats['max_weight_mean']:.6f}\n")
+            f.write(f"qasp_min_weight_mean: {qasp_stats['min_weight_mean']:.6f}\n")
+            f.write(f"qasp_num_positive_eigs_mean: {qasp_stats['num_positive_eigs_mean']:.6f}\n")
+        if tgbqe_stats:
+            f.write(f"tgbqe_topk_mean_fusion_mean: {tgbqe_stats['topk_mean_fusion_mean']:.6f}\n")
+            f.write(f"tgbqe_anchor_weight_mean: {tgbqe_stats['anchor_weight_mean']:.6f}\n")
+            f.write(f"tgbqe_weight_entropy_mean: {tgbqe_stats['weight_entropy_mean']:.6f}\n")
     
     print(f"Saved mAP summary to: {mAP_file}")
     
@@ -386,6 +610,101 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
                 writer.writerow([path, text, ap])
     
     print(f"Saved per-query APs to: {APs_file}")
+
+    if is_mahf:
+        mahf_dir = os.path.join(args.results_dir, "MAHF")
+        os.makedirs(mahf_dir, exist_ok=True)
+        mahf_file = os.path.join(mahf_dir, f"{args.backbone}_{dataset_name}_{method}.csv")
+        with open(mahf_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["query_path", "text", "instance", "alignment", "lambda_q", "AP"])
+            for result in instance_results:
+                if result["alignments"] is None or result["lambda_qs"] is None:
+                    continue
+                for path, text, instance, alignment, lambda_q, ap in zip(
+                    result["query_paths"],
+                    result["query_texts"],
+                    result["query_instances"],
+                    result["alignments"],
+                    result["lambda_qs"],
+                    result["APs"],
+                ):
+                    writer.writerow([
+                        path,
+                        text,
+                        instance,
+                        round(float(alignment), 6),
+                        round(float(lambda_q), 6),
+                        float(ap),
+                    ])
+        print(f"Saved MA-HF query statistics to: {mahf_file}")
+
+    if is_qasp:
+        qasp_dir = os.path.join(args.results_dir, "QASP")
+        os.makedirs(qasp_dir, exist_ok=True)
+        qasp_file = os.path.join(qasp_dir, f"{args.backbone}_{dataset_name}_{method}.csv")
+        with open(qasp_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "query_path", "text", "instance",
+                "active_negatives", "weight_entropy", "max_weight", "min_weight",
+                "num_positive_eigs", "AP"
+            ])
+            for result in instance_results:
+                if result["qasp_active_negatives"] is None:
+                    continue
+                for row in zip(
+                    result["query_paths"],
+                    result["query_texts"],
+                    result["query_instances"],
+                    result["qasp_active_negatives"],
+                    result["qasp_weight_entropy"],
+                    result["qasp_max_weight"],
+                    result["qasp_min_weight"],
+                    result["qasp_num_positive_eigs"],
+                    result["APs"],
+                ):
+                    path, text, instance, active, entropy, max_w, min_w, npos, ap = row
+                    writer.writerow([
+                        path, text, instance,
+                        int(active), round(float(entropy), 6), round(float(max_w), 6), round(float(min_w), 6),
+                        int(npos), float(ap)
+                    ])
+        print(f"Saved QASP query statistics to: {qasp_file}")
+
+    if is_tgbqe:
+        tgbqe_dir = os.path.join(args.results_dir, "TGBQE")
+        os.makedirs(tgbqe_dir, exist_ok=True)
+        tgbqe_file = os.path.join(tgbqe_dir, f"{args.backbone}_{dataset_name}_{method}.csv")
+        with open(tgbqe_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "query_path", "text", "instance",
+                "topk_mean_fusion", "anchor_weight", "weight_entropy", "AP"
+            ])
+            for result in instance_results:
+                if result["tgbqe_topk_mean_fusion"] is None:
+                    continue
+                for row in zip(
+                    result["query_paths"],
+                    result["query_texts"],
+                    result["query_instances"],
+                    result["tgbqe_topk_mean_fusion"],
+                    result["tgbqe_anchor_weight"],
+                    result["tgbqe_weight_entropy"],
+                    result["APs"],
+                ):
+                    path, text, instance, topk_mean, anchor, entropy, ap = row
+                    writer.writerow([
+                        path,
+                        text,
+                        instance,
+                        round(float(topk_mean), 6),
+                        round(float(anchor), 6),
+                        round(float(entropy), 6),
+                        float(ap),
+                    ])
+        print(f"Saved TG-BQE query statistics to: {tgbqe_file}")
     
     # Save detailed retrieval logs
     # Uncomment the following block to enable detailed logs
@@ -463,6 +782,11 @@ def main():
     
     # Apply method preset (can be overridden by command-line args)
     args = apply_method_preset(args)
+
+    if args.qasp_beta < 1.0:
+        raise ValueError(f"--qasp_beta must be >= 1.0, got {args.qasp_beta}")
+    if args.tgbqe_k <= 0:
+        raise ValueError(f"--tgbqe_k must be > 0, got {args.tgbqe_k}")
     
     # Features are already normalized
     args.norm = True
