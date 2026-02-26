@@ -19,68 +19,27 @@ METHOD_PRESETS = {
     "basic": {
         "description": "Full BASIC method with all components",
         "contextualize": True,
+        "mahf": False,
+        "qasp": False,
+        "tgbqe": False,
         "specified_corpus": "generic_subjects",
         "specified_ncorpus": "generic_styles",
         "aa": 0.2,
+        "qasp_beta": 1.0,
         "num_principal_components_for_projection": 250.0,
         "standardize_features": True,
         "use_laion_mean": True,
         "project_features": True,
         "do_query_expansion": True,
-        "normalize_similarities": True,
-        "path_to_synthetic_data": "./synthetic_data",
-        "harris_lambda": 0.1
-    },
-    "mahf": {
-        "description": "Modality-Adaptive Harris Fusion (query-adaptive penalty)",
-        "contextualize": True,
-        "specified_corpus": "generic_subjects",
-        "specified_ncorpus": "generic_styles",
-        "aa": 0.2,
-        "num_principal_components_for_projection": 250.0,
-        "standardize_features": True,
-        "use_laion_mean": True,
-        "project_features": True,
-        "do_query_expansion": True,
-        "normalize_similarities": True,
-        "path_to_synthetic_data": "./synthetic_data",
-        "mahf_mapping": "exp",
-        "mahf_tau": 0.2,
-        "mahf_lambda_min": 0.0,
-        "mahf_lambda_max": 0.1
-    },
-    "qasp": {
-        "description": "Query-Adaptive Dynamic Subspace Projection (QASP)",
-        "contextualize": True,
-        "specified_corpus": "generic_subjects",
-        "specified_ncorpus": "generic_styles",
-        "aa": 0.2,
-        "qasp_beta": 2.0,
-        "num_principal_components_for_projection": 250.0,
-        "standardize_features": True,
-        "use_laion_mean": True,
-        "project_features": True,
-        "do_query_expansion": True,
-        "normalize_similarities": True,
-        "path_to_synthetic_data": "./synthetic_data",
-        "harris_lambda": 0.1
-    },
-    "tgbqe": {
-        "description": "Text-Guided Bimodal Query Expansion (TG-BQE)",
-        "contextualize": True,
-        "specified_corpus": "generic_subjects",
-        "specified_ncorpus": "generic_styles",
-        "aa": 0.2,
-        "num_principal_components_for_projection": 250.0,
-        "standardize_features": True,
-        "use_laion_mean": True,
-        "project_features": True,
-        "do_query_expansion": True,
+        "tgbqe_k": 25,
+        "tgbqe_gamma": 50,
         "normalize_similarities": True,
         "path_to_synthetic_data": "./synthetic_data",
         "harris_lambda": 0.1,
-        "tgbqe_k": 25,
-        "tgbqe_gamma": 1000.0
+        "mahf_mapping": "exp",
+        "mahf_tau": 0.001,
+        "mahf_lambda_min": 0.0,
+        "mahf_lambda_max": 0.1
     },
     "sum": {
         "description": "Simple sum fusion of image and text similarities",
@@ -105,10 +64,13 @@ def parse_args():
     parser.add_argument("--gpu", default=0, type=int, help="GPU id")
     parser.add_argument("--dataset", default="icir", type=str, help="Dataset name")
     parser.add_argument("--backbone", choices=["clip", "siglip"], default="clip", type=str, help="Vision-language model backbone")
-    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic", "mahf", "qasp", "tgbqe"], type=str, default="basic", help="Retrieval method")
+    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic"], type=str, default="basic", help="Retrieval method")
     
     # Text processing
     parser.add_argument("--contextualize", action="store_true", help="Contextualize text queries with corpus")
+    parser.add_argument("--mahf", action="store_true", help="Enable Modality-Adaptive Harris Fusion modifier for basic")
+    parser.add_argument("--qasp", action="store_true", help="Enable Query-Adaptive Dynamic Subspace Projection modifier for basic")
+    parser.add_argument("--tgbqe", action="store_true", help="Enable Text-Guided Bimodal Query Expansion modifier for basic")
     
     # Decomposition method parameters
     parser.add_argument("--specified_corpus", type=str, default="generic_subjects", help="Positive corpus for PCA projection")
@@ -181,8 +143,11 @@ def apply_method_preset(args):
     parser.add_argument("--gpu", default=0, type=int)
     parser.add_argument("--dataset", choices=["icir"], default="icir", type=str)
     parser.add_argument("--backbone", choices=["clip", "siglip"], default="clip", type=str)
-    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic", "mahf", "qasp", "tgbqe"], type=str, default="basic")
+    parser.add_argument("--method", choices=["image", "text", "sum", "product", "basic"], type=str, default="basic")
     parser.add_argument("--contextualize", action="store_true")
+    parser.add_argument("--mahf", action="store_true")
+    parser.add_argument("--qasp", action="store_true")
+    parser.add_argument("--tgbqe", action="store_true")
     parser.add_argument("--specified_corpus", type=str, default="generic_subjects")
     parser.add_argument("--specified_ncorpus", type=str, default="generic_styles")
     parser.add_argument("--aa", type=float, default=0.2)
@@ -229,6 +194,26 @@ def apply_method_preset(args):
             print(override)
     
     return args
+
+
+def build_method_variant(args):
+    """
+    Build output-safe method identifier including active basic modifiers.
+    """
+    if args.method.lower() != "basic":
+        return args.method.lower()
+
+    modifiers = []
+    if args.mahf:
+        modifiers.append("mahf")
+    if args.qasp:
+        modifiers.append("qasp")
+    if args.tgbqe:
+        modifiers.append("tgbqe")
+
+    if not modifiers:
+        return "basic"
+    return "basic_" + "_".join(modifiers)
 
 
 
@@ -431,9 +416,9 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
     all_tgbqe_topk_mean_fusion = []
     all_tgbqe_anchor_weight = []
     all_tgbqe_weight_entropy = []
-    is_mahf = args.method.lower() == "mahf"
-    is_qasp = args.method.lower() == "qasp"
-    is_tgbqe = args.method.lower() == "tgbqe"
+    is_mahf = args.method.lower() == "basic" and args.mahf
+    is_qasp = args.method.lower() == "basic" and args.qasp
+    is_tgbqe = args.method.lower() == "basic" and args.tgbqe
     
     for result in instance_results:
         all_APs.extend(result["APs"])
@@ -542,25 +527,18 @@ def save_results(instance_results, args, method, dataset_name, elapsed_time):
         
         # Exclude runtime-specific arguments
         excluded_keys = {'results_dir', 'gpu', 'device'}
-        basic_specific_keys = {
+        advanced_basic_keys = {
+            'mahf', 'qasp', 'tgbqe', 'contextualize',
             'specified_corpus', 'specified_ncorpus', 'aa',
             'qasp_beta', 'num_principal_components_for_projection', 'standardize_features',
             'use_laion_mean', 'project_features', 'do_query_expansion',
-            'tgbqe_k', 'tgbqe_gamma', 'normalize_similarities', 'path_to_synthetic_data', 'harris_lambda'
+            'tgbqe_k', 'tgbqe_gamma', 'normalize_similarities', 'path_to_synthetic_data',
+            'harris_lambda', 'mahf_mapping', 'mahf_tau', 'mahf_lambda_min', 'mahf_lambda_max'
         }
-        mahf_specific_keys = {'mahf_mapping', 'mahf_tau', 'mahf_lambda_min', 'mahf_lambda_max'}
-        qasp_specific_keys = {'qasp_beta'}
-        tgbqe_specific_keys = {'tgbqe_k', 'tgbqe_gamma'}
         
         # For non-basic methods, also exclude basic-specific parameters
-        if args.method.lower() not in {'basic', 'mahf', 'qasp', 'tgbqe'}:
-            excluded_keys.update(basic_specific_keys)
-        if args.method.lower() != 'mahf':
-            excluded_keys.update(mahf_specific_keys)
-        if args.method.lower() != 'qasp':
-            excluded_keys.update(qasp_specific_keys)
-        if args.method.lower() != 'tgbqe':
-            excluded_keys.update(tgbqe_specific_keys)
+        if args.method.lower() != 'basic':
+            excluded_keys.update(advanced_basic_keys)
         
         filtered_dict = {k: v for k, v in args_dict.items() if k not in excluded_keys}
         max_key_len = max(len(key) for key in filtered_dict.keys())
@@ -770,7 +748,8 @@ def run_retrieval(args):
     
     # Save results
     elapsed_time = time.time() - start_time
-    mAP = save_results(instance_results, args, args.method, 
+    method_variant = build_method_variant(args)
+    mAP = save_results(instance_results, args, method_variant,
                       args.dataset, elapsed_time)
     
     return mAP
@@ -783,6 +762,10 @@ def main():
     # Apply method preset (can be overridden by command-line args)
     args = apply_method_preset(args)
 
+    if args.method.lower() != "basic" and (args.mahf or args.qasp or args.tgbqe):
+        raise ValueError("--mahf/--qasp/--tgbqe modifiers are only supported with --method basic")
+    if args.method.lower() == "basic" and args.tgbqe and not args.do_query_expansion:
+        raise ValueError("--tgbqe requires --do_query_expansion")
     if args.qasp_beta < 1.0:
         raise ValueError(f"--qasp_beta must be >= 1.0, got {args.qasp_beta}")
     if args.tgbqe_k <= 0:

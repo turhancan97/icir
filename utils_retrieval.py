@@ -337,7 +337,10 @@ def calculate_rankings(args, image_features, text_features, database_features, r
     
     # ===== Proposed Method (Basic) =====
     # note that this implementation is not as efficient as possible. See paper for details.
-    elif method_name in ("basic", "mahf", "qasp", "tgbqe"):
+    elif method_name == "basic":
+        use_mahf = bool(getattr(args, "mahf", False))
+        use_qasp = bool(getattr(args, "qasp", False))
+        use_tgbqe = bool(getattr(args, "tgbqe", False))
 
         # Load text corpora for BASIC method
         corpus_dir = os.path.join("features", f"{args.backbone}_features", "corpus")
@@ -381,7 +384,7 @@ def calculate_rankings(args, image_features, text_features, database_features, r
             centered_corpus_pos_features, centered_corpus_neg_features = text_corpus_pos, text_corpus_neg
             centered_text_features = text_features
 
-        if method_name == "mahf":
+        if use_mahf:
             alignment, alignment_01 = _normalized_cosine_alignment(
                 centered_image_features, centered_text_features
             )
@@ -399,7 +402,7 @@ def calculate_rankings(args, image_features, text_features, database_features, r
             A, B = centered_corpus_pos_features, centered_corpus_neg_features
 
             Nc = int(args.num_principal_components_for_projection)
-            if method_name == "qasp":
+            if use_qasp:
                 qasp_projector = DynamicSubspaceProjector(
                     x_plus_centered=A,
                     x_minus_centered=B,
@@ -462,7 +465,7 @@ def calculate_rankings(args, image_features, text_features, database_features, r
 
         # query expansion
         if args.do_query_expansion:
-            if method_name == "tgbqe":
+            if use_tgbqe:
                 expanded_queries = []
                 topk_mean_fusion = []
                 anchor_weight = []
@@ -513,7 +516,7 @@ def calculate_rankings(args, image_features, text_features, database_features, r
                 # weighted mean
                 top_features = top_features * top_values.unsqueeze(-1).cpu()
                 top_features = top_features.sum(dim=1).to(device)
-                if method_name == "qasp":
+                if use_qasp:
                     qasp_projector = DynamicSubspaceProjector(
                         x_plus_centered=centered_corpus_pos_features,
                         x_minus_centered=centered_corpus_neg_features,
@@ -546,7 +549,7 @@ def calculate_rankings(args, image_features, text_features, database_features, r
         sim_img = torch.clamp(sim_img, min=0)
 
         # apply harris criterion
-        if method_name == "mahf":
+        if use_mahf:
             lambda_q_cpu = lambda_q.unsqueeze(1).cpu()
             sim_all = sim_text * sim_img - lambda_q_cpu * (sim_text + sim_img)**2
         else:

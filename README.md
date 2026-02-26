@@ -246,14 +246,17 @@ The easiest way is to use method presets with `--use_preset`:
 # Full BASIC method (recommended)
 python3 run_retrieval.py --method basic --use_preset
 
-# Full MA-HF method (query-adaptive Harris penalty)
-python3 run_retrieval.py --method mahf --use_preset
+# BASIC + MA-HF
+python3 run_retrieval.py --method basic --mahf --use_preset
 
-# Full QASP method (query-adaptive dynamic projection)
-python3 run_retrieval.py --method qasp --use_preset
+# BASIC + QASP
+python3 run_retrieval.py --method basic --qasp --use_preset
 
-# Full TG-BQE method (text-guided bimodal query expansion)
-python3 run_retrieval.py --method tgbqe --use_preset
+# BASIC + TG-BQE
+python3 run_retrieval.py --method basic --tgbqe --use_preset
+
+# BASIC + MA-HF + QASP + TG-BQE
+python3 run_retrieval.py --method basic --mahf --qasp --tgbqe --use_preset
 
 # Baseline methods
 python3 run_retrieval.py --method sum --use_preset
@@ -288,7 +291,8 @@ TG-BQE with explicit query-expansion settings:
 
 ```bash
 python3 run_retrieval.py \
-  --method tgbqe \
+  --method basic \
+  --tgbqe \
   --backbone clip \
   --dataset icir \
   --results_dir results/ \
@@ -312,7 +316,8 @@ MA-HF with explicit adaptive-penalty settings:
 
 ```bash
 python3 run_retrieval.py \
-  --method mahf \
+  --method basic \
+  --mahf \
   --backbone clip \
   --dataset icir \
   --results_dir results/ \
@@ -337,7 +342,8 @@ QASP with explicit adaptive-projection settings:
 
 ```bash
 python3 run_retrieval.py \
-  --method qasp \
+  --method basic \
+  --qasp \
   --backbone clip \
   --dataset icir \
   --results_dir results/ \
@@ -358,12 +364,9 @@ python3 run_retrieval.py \
 
 # Methods
 
-The codebase implements several retrieval methods:
+The codebase implements the following retrieval methods:
 
-- **basic**: Full decomposition method with all components (PCA projection, query expansion, Harris fusion)
-- **mahf**: Modality-Adaptive Harris Fusion with query-conditioned penalty
-- **qasp**: Query-Adaptive Dynamic Subspace Projection for text-conditioned style suppression
-- **tgbqe**: Text-Guided Bimodal Query Expansion to reduce semantic drift in QE
+- **basic**: Full decomposition method with optional composable modifiers (`--mahf`, `--qasp`, `--tgbqe`)
 - **sum**: Simple sum of image and text similarities
 - **product**: Simple product of image and text similarities  
 - **image**: Image-only retrieval (ignores text)
@@ -492,9 +495,12 @@ TG-BQE uses contextualized text features and keeps expansion anchored by appendi
 
 # Key Parameters
 
-- `--method`: Retrieval method (`basic`, `mahf`, `qasp`, `tgbqe`, `sum`, `product`, `image`, `text`)
+- `--method`: Retrieval method (`basic`, `sum`, `product`, `image`, `text`)
 - `--backbone`: Vision-language model (`clip` for ViT-L/14, `siglip` for ViT-L-16-SigLIP-256)
 - `--use_preset`: Use predefined method configurations (recommended)
+- `--mahf`: Enable MA-HF modifier within `basic`
+- `--qasp`: Enable QASP modifier within `basic`
+- `--tgbqe`: Enable TG-BQE modifier within `basic`
 - `--specified_corpus`: Positive corpus for projection (default: `generic_subjects`)
 - `--specified_ncorpus`: Negative corpus for projection (default: `generic_styles`)
 - `--num_principal_components_for_projection`: PCA components, >1 for exact count or <1 for energy threshold (default: 250)
@@ -530,15 +536,15 @@ Results are saved to the specified results directory (default: `results/`):
 ```
 results/
 ├── mAP/
-│   └── {backbone}_{dataset}_{method}.txt
+│   └── {backbone}_{dataset}_{method_variant}.txt
 ├── APs/
-│   └── {backbone}_{dataset}_{method}.csv
+│   └── {backbone}_{dataset}_{method_variant}.csv
 ├── TGBQE/
-│   └── {backbone}_{dataset}_tgbqe.csv
+│   └── {backbone}_{dataset}_{method_variant}.csv
 ├── QASP/
-│   └── {backbone}_{dataset}_qasp.csv
+│   └── {backbone}_{dataset}_{method_variant}.csv
 └── MAHF/
-    └── {backbone}_{dataset}_mahf.csv
+    └── {backbone}_{dataset}_{method_variant}.csv
 ```
 
 Each result file includes:
@@ -547,6 +553,8 @@ Each result file includes:
 - TG-BQE per-query expansion diagnostics (`results/TGBQE`, TG-BQE only)
 - QASP per-query adaptive projection diagnostics (`results/QASP`, QASP only)
 - MA-HF per-query alignment and adaptive penalty diagnostics (`results/MAHF`, MA-HF only)
+
+`method_variant` is automatically expanded from `basic` flags (for example: `basic`, `basic_mahf`, `basic_qasp_tgbqe`, `basic_mahf_qasp_tgbqe`).
 
 # Results (mAP \%)
 
